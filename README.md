@@ -1,57 +1,163 @@
-# Welcome to your Expo app 👋
+# LendFlow 💰
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A production-ready mobile application for managing private lending, borrower portfolios, and automated interest collection businesses.
 
-## Get started
+Built with **React Native (Expo SDK 57)** and **Supabase (PostgreSQL, Row Level Security, RPC Functions, and pg_cron)**.
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## 🏛️ Architecture Overview
 
-2. Start the app
+The system strictly adheres to the serverless mobile-first architecture:
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+┌────────────────────────────────────────────────────────┐
+│                   React Native App                     │
+│    (TypeScript, Expo Router, TanStack Query, Zustand)  │
+└──────────────────────────┬─────────────────────────────┘
+                           │ Direct Supabase Client
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│                      Supabase                          │
+│  ├── Supabase Auth (Email / Password Sessions)         │
+│  ├── PostgreSQL with Row Level Security (RLS)          │
+│  ├── Centralized PostgreSQL RPC Functions              │
+│  └── pg_cron Daily Autonomous Scheduler                │
+└────────────────────────────────────────────────────────┘
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+> **NO custom Node.js, Express, NestJS, Firebase, or intermediate custom API servers.**  
+> The database is the authoritative source of truth. Financial calculations, state transitions, and automated generation are executed directly within PostgreSQL.
 
-### Other setup steps
+---
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## 🚀 Key Features
 
-## Learn more
+1. **Automated Interest Due Generation**:
+   - Automated via PostgreSQL `generate_due_interest_records()` and `pg_cron`.
+   - Runs daily independently of whether the mobile app is open or closed.
+   - Idempotent and transaction safe: uses `UNIQUE(loan_id, due_date)` with `ON CONFLICT DO NOTHING`.
+   - Handles accumulated/missed overdue intervals automatically.
 
-To learn more about developing your project with Expo, look at the following resources:
+2. **Lending Lifecycle**:
+   - **Create Loan Wizard**: 5-step form with live real-time financial calculation preview.
+   - **Configurable Frequencies**: 15 days, 30 days, 45 days, 50 days, or custom interval days.
+   - **Financial Rules**: Uses PostgreSQL `NUMERIC(14,2)` precision. No floating point inaccuracies.
+   - **Principal Settlement**: Marking principal as `FULLY_PAID` closes the loan and halts future interest generation.
+   - **Loan Reopening**: Accidental closures can be safely reopened, resuming generation from the next scheduled due date without duplicating past dues.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+3. **Collections & Payments**:
+   - **Mark as Paid**: Sets status to `PAID`, records timestamp and collected amount.
+   - **Payment Reversal**: Safely reverts payment back to `UNPAID` without deleting historical due records.
 
-## Join the community
+4. **Multi-Tenant & Security**:
+   - Multi-tenant architecture (`organizations`, `organization_members`).
+   - Strict Row Level Security (RLS) on all tables.
+   - Comprehensive tamper-evident `audit_logs` tracking every creation, payment, reversal, closure, and reopening.
+   - Privacy-focused: Aadhaar/Govt ID numbers are masked (`XXXX-XXXX-4321`) with only last 4 digits stored.
 
-Join our community of developers creating universal apps.
+5. **Offline-First Resilience**:
+   - TanStack Query with 24-hour garbage collection caching.
+   - Interactive demo mode with the exact Arun Kumar acceptance scenario.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-# LendFlow
+---
+
+## 📁 Database Schema & Migrations
+
+All database definitions are located in `supabase/migrations/`:
+
+| File | Description |
+|------|-------------|
+| [`001_initial_schema.sql`](file:///Users/sush/Projects/LendFlow/supabase/migrations/001_initial_schema.sql) | Core tables: `organizations`, `organization_members`, `profiles`, `borrowers`, `loans`, `interest_dues`, `audit_logs` |
+| [`002_rls.sql`](file:///Users/sush/Projects/LendFlow/supabase/migrations/002_rls.sql) | Row Level Security policies scoping every table to the user's organization |
+| [`003_functions.sql`](file:///Users/sush/Projects/LendFlow/supabase/migrations/003_functions.sql) | PostgreSQL RPCs: `calculate_interest_amount`, `generate_due_interest_records`, `mark_interest_paid`, `reverse_interest_payment`, `close_loan`, `reopen_loan`, `get_dashboard_summary` |
+| [`004_indexes.sql`](file:///Users/sush/Projects/LendFlow/supabase/migrations/004_indexes.sql) | Performance indexes for high-frequency queries, text search, and the scheduler |
+| [`005_scheduler.sql`](file:///Users/sush/Projects/LendFlow/supabase/migrations/005_scheduler.sql) | Autonomous `pg_cron` daily schedule for `generate_due_interest_records(CURRENT_DATE)` |
+| [`seed.sql`](file:///Users/sush/Projects/LendFlow/supabase/seed.sql) | Acceptance test seed data (Arun Kumar, Priya Sharma, Rajesh Patel) |
+
+---
+
+## 🧪 Acceptance Scenario Verification
+
+### Acceptance Test Case:
+- **Borrower**: Arun Kumar
+- **Principal Amount**: ₹10,000
+- **Interest Rate**: 5%
+- **Frequency**: Every 30 days
+- **Loan Start Date**: 25 September 2026
+- **First Interest Due Date**: 25 October 2026
+- **Expected Monthly Interest**: ₹10,000 × 5 / 100 = ₹500.00
+
+### Running the Test Suite:
+
+1. **JavaScript Acceptance Runner**:
+   ```bash
+   node scripts/test-acceptance.js
+   ```
+   *Output:*
+   ```
+   ========================================================
+   LENDFLOW CORE ACCEPTANCE TEST SUITE
+   ========================================================
+   ✓ TEST 1 PASSED: Arun Kumar ₹10,000 @ 5% = ₹500.00 exact
+   ✓ TEST 2 PASSED: 30-day interval from 2026-09-25 = 2026-10-25
+   ✓ TEST 3 PASSED: Duplicate prevention (UNIQUE loan_id, due_date) verified
+   ✓ TEST 4 PASSED: Mark interest as PAID verified
+   ✓ TEST 5 PASSED: Reverse payment restored record to UNPAID without deletion
+   ========================================================
+   ALL ACCEPTANCE TESTS PASSED SUCCESSFULLY!
+   ========================================================
+   ```
+
+2. **PostgreSQL Database Functional Test**:
+   Execute inside Supabase SQL Editor:
+   ```sql
+   -- Run supabase/tests/database_test.sql
+   ```
+
+---
+
+## ⚙️ Setup & Local Development
+
+### Prerequisites:
+- Node.js 18+
+- Expo CLI (`npx expo`)
+
+### 1. Install Dependencies:
+```bash
+npm install
+```
+
+### 2. Environment Variables:
+Copy `.env.example` or create `.env`:
+```env
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+*(If no `.env` is provided, the application runs automatically in offline-capable Demo Mode with acceptance sample data preloaded).*
+
+### 3. Run the App:
+```bash
+npx expo start
+```
+- Press `i` for iOS Simulator
+- Press `a` for Android Emulator
+- Press `w` for Web
+
+### 4. Typecheck:
+```bash
+npx tsc --noEmit
+```
+
+---
+
+## 📱 Mobile Screens
+
+- **Dashboard**: High-level KPI cards, Today's Dues, Overdue Tracker, Recent Loans, and manual scheduler simulation button.
+- **Loans**: Filterable loan cards (Active, Closed, Fully Paid, Due Today) with search by name, phone, city, or ID.
+- **Due**: Granular list of scheduled dues with one-tap **Mark as Paid** and **Reverse Payment**.
+- **Borrowers**: Directory with quick phone calling, residential details, and loan counts.
+- **Create Loan Wizard**: 5-section form with live preview of period interest and next due dates.
+- **Loan Details**: Comprehensive financial statement (Principal, Rate, Total Paid, Total Unpaid, Total Generated), Full Settlement, Reopening, and complete Due History.
+- **Reports**: Capital yield, collection totals, and borrower-wise breakdown over customizable date ranges.
+- **Audit Trail**: Real-time log of state modifications, user IDs, and old/new snapshots.
