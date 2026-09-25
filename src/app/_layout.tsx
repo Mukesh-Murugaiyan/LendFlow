@@ -1,18 +1,82 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import React, { useEffect } from 'react';
+import { Stack } from 'expo-router';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { StatusBar } from 'expo-status-bar';
+import { queryClient } from '@/services/queryClient';
+import { useAuthStore } from '@/store/useAuthStore';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+export default function RootLayout() {
+  const { initializeAuth } = useAuthStore();
 
-SplashScreen.preventAutoHideAsync();
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <StatusBar style="dark" />
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: '#FFFFFF' },
+          headerTintColor: '#0F172A',
+          headerTitleStyle: { fontWeight: '700' },
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: '#F8FAFC' },
+        }}
+      >
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="create-loan"
+          options={{
+            presentation: 'modal',
+            title: 'Create Loan',
+            headerBackTitle: 'Cancel',
+          }}
+        />
+        <Stack.Screen
+          name="create-borrower"
+          options={{
+            presentation: 'modal',
+            title: 'New Borrower',
+            headerBackTitle: 'Cancel',
+          }}
+        />
+        <Stack.Screen
+          name="loan/[id]"
+          options={{
+            title: 'Loan Details',
+            headerBackTitle: 'Back',
+          }}
+        />
+        <Stack.Screen
+          name="borrower/[id]"
+          options={{
+            title: 'Borrower Profile',
+            headerBackTitle: 'Back',
+          }}
+        />
+        <Stack.Screen
+          name="reports"
+          options={{
+            title: 'Financial Reports',
+            headerBackTitle: 'Back',
+          }}
+        />
+        <Stack.Screen
+          name="audit-logs"
+          options={{
+            title: 'Audit Trail',
+            headerBackTitle: 'Back',
+          }}
+        />
+        <Stack.Screen
+          name="auth"
+          options={{
+            presentation: 'modal',
+            title: 'Sign In',
+          }}
+        />
+      </Stack>
+    </QueryClientProvider>
   );
 }
