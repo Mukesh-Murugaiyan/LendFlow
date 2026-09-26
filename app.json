@@ -17,7 +17,11 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.sushsuga.LendFlow"
+      "package": "com.sushsuga.LendFlow",
+      "androidNavigationBar": {
+        "backgroundColor": "#FFFFFF",
+        "barStyle": "dark-content"
+      }
     },
     "web": {
       "output": "static",

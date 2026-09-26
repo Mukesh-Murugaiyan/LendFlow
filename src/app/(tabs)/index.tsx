@@ -20,9 +20,10 @@ import { lendflowApi } from '@/services/api/lendflowApi';
 import { useAppStore } from '@/store/useAppStore';
 import { formatDisplayDate, toISODateString } from '@/utils/date';
 import { formatCurrency } from '@/utils/financial';
+import { getFriendlyErrorMessage } from '@/utils/error';
 
 export default function DashboardScreen() {
-  const { currentOrgId, setLastSyncedAt } = useAppStore();
+  const { currentOrgId, setLastSyncedAt, isOnline } = useAppStore();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'today' | 'overdue' | 'upcoming' | 'recent_loans'>('today');
 
@@ -63,7 +64,7 @@ export default function DashboardScreen() {
       );
     },
     onError: (err: any) => {
-      Alert.alert('Error', err.message || 'Failed to trigger interest generation');
+      Alert.alert('Error', getFriendlyErrorMessage(err, 'Failed to trigger interest generation.'));
     },
   });
 
@@ -83,22 +84,26 @@ export default function DashboardScreen() {
       <Header
         title="LendFlow"
         subtitle="Private Lending & Interest Management"
-        rightAction={{
-          icon: 'flash-outline',
-          onPress: () => {
-            Alert.alert(
-              'Database Scheduler',
-              'Create Pending Interest Record',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Run Now',
-                  onPress: () => generateMutation.mutate(today),
+        rightAction={
+          isOnline
+            ? {
+                icon: 'flash-outline',
+                onPress: () => {
+                  Alert.alert(
+                    'Database Scheduler',
+                    'Create Pending Interest Record',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Run Now',
+                        onPress: () => generateMutation.mutate(today),
+                      },
+                    ]
+                  );
                 },
-              ]
-            );
-          },
-        }}
+              }
+            : undefined
+        }
       />
 
       <ScrollView

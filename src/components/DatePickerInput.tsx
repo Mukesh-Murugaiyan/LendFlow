@@ -22,6 +22,7 @@ import {
   isToday,
 } from 'date-fns';
 import { formatDisplayDate } from '@/utils/date';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface DatePickerInputProps {
   value: string; // YYYY-MM-DD
@@ -38,6 +39,7 @@ export function DatePickerInput({
   label,
   error,
 }: DatePickerInputProps) {
+  const insets = useSafeAreaInsets();
   const [modalVisible, setModalVisible] = useState(false);
 
   // Initialize view date based on current value or today
@@ -107,7 +109,10 @@ export function DatePickerInput({
         animationType="fade"
         onRequestClose={() => setModalVisible(false)}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
+        <Pressable
+          style={[styles.modalOverlay, { paddingBottom: Math.max(insets.bottom, 20) }]}
+          onPress={() => setModalVisible(false)}
+        >
           <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
             {/* Header */}
             <View style={styles.modalHeader}>

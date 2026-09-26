@@ -1,47 +1,60 @@
-import React, { useState } from 'react';
+import { useAuthStore } from '@/store/useAuthStore';
+import { getFriendlyErrorMessage } from '@/utils/error';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '@/store/useAuthStore';
 
 export default function AuthScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const { signIn, signUp, isLoading } = useAuthStore();
 
   const handleAuth = async () => {
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail || !password) {
       Alert.alert('Required Fields', 'Please enter both email and password.');
       return;
     }
 
+    if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address (e.g. name@example.com).');
+      return;
+    }
+
     if (isSignUp) {
-      if (!fullName) {
+      if (!fullName.trim()) {
         Alert.alert('Name Required', 'Please provide your full name.');
         return;
       }
-      const res = await signUp(email, password, fullName);
+      if (password.length < 6) {
+        Alert.alert('Password Too Short', 'Password must be at least 6 characters long.');
+        return;
+      }
+      const res = await signUp(trimmedEmail, password, fullName.trim());
       if (res.error) {
-        Alert.alert('Sign Up Error', res.error);
+        Alert.alert('Sign Up Error', getFriendlyErrorMessage(res.error, 'Failed to create account.'));
       } else {
         router.replace('/(tabs)');
       }
     } else {
-      const res = await signIn(email, password);
+      const res = await signIn(trimmedEmail, password);
       if (res.error) {
-        Alert.alert('Login Failed', res.error);
+        Alert.alert('Login Failed', getFriendlyErrorMessage(res.error, 'Invalid credentials.'));
       } else {
         router.replace('/(tabs)');
       }
@@ -70,7 +83,7 @@ export default function AuthScreen() {
             <Text style={styles.fieldLabel}>Full Name / Business Name</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. Mukesh Murugaiyan"
+              placeholder="Enter Your Name"
               value={fullName}
               onChangeText={setFullName}
               autoCapitalize="words"
@@ -82,7 +95,7 @@ export default function AuthScreen() {
           <Text style={styles.fieldLabel}>Email Address</Text>
           <TextInput
             style={styles.input}
-            placeholder="lender@example.com"
+            placeholder="Enter Your Email"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -92,13 +105,28 @@ export default function AuthScreen() {
 
         <View style={styles.fieldWrap}>
           <Text style={styles.fieldLabel}>Password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Enter Your Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={styles.eyeIconBtn}
+              onPress={() => setShowPassword(!showPassword)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color="#64748B"
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -188,6 +216,27 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     color: '#0F172A',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#0F172A',
+  },
+  eyeIconBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   primaryBtn: {
     backgroundColor: '#4F46E5',
