@@ -3,6 +3,7 @@ import { supabase } from '@/services/supabase';
 import { Profile } from '@/types/database';
 import { useAppStore } from './useAppStore';
 import { resolveOrganizationId } from '@/services/api/lendflowApi';
+import { getFriendlyErrorMessage } from '@/utils/error';
 
 interface AuthState {
   user: any | null;
@@ -90,7 +91,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         set({ isLoading: false });
-        return { error: error.message };
+        return { error: getFriendlyErrorMessage(error, 'Invalid credentials. Please check your email and password.') };
       }
 
       const profile = await syncUserSession(data.user);
@@ -104,7 +105,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       return {};
     } catch (err: any) {
       set({ isLoading: false });
-      return { error: err.message || 'Login failed' };
+      return { error: getFriendlyErrorMessage(err, 'Invalid credentials. Please check your email and password.') };
     }
   },
 
@@ -120,7 +121,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
       if (error) {
         set({ isLoading: false });
-        return { error: error.message };
+        return { error: getFriendlyErrorMessage(error, 'Failed to create account.') };
       }
 
       if (data.user) {
@@ -135,7 +136,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       return {};
     } catch (err: any) {
       set({ isLoading: false });
-      return { error: err.message || 'Signup failed' };
+      return { error: getFriendlyErrorMessage(err, 'Failed to create account.') };
     }
   },
 

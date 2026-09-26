@@ -14,10 +14,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Header } from '@/components/Header';
 import { lendflowApi } from '@/services/api/lendflowApi';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useAppStore } from '@/store/useAppStore';
+import { syncEngine } from '@/services/offline/syncEngine';
 import { toISODateString } from '@/utils/date';
+import { getFriendlyErrorMessage } from '@/utils/error';
 
 export default function SettingsScreen() {
   const { profile, signOut } = useAuthStore();
+  const { isOnline, pendingSyncCount, isSyncing, lastSyncedAt } = useAppStore();
   const queryClient = useQueryClient();
 
   const generateMutation = useMutation({
@@ -30,7 +34,7 @@ export default function SettingsScreen() {
       );
     },
     onError: (err: any) => {
-      Alert.alert('Scheduler Error', err.message || 'Failed to trigger interest generation');
+      Alert.alert('Scheduler Error', getFriendlyErrorMessage(err, 'Failed to trigger interest generation.'));
     },
   });
 
@@ -92,23 +96,28 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Financial Tools & Automation */}
-        <Text style={styles.sectionTitle}>Database Automation & Scheduler</Text>
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.row}
-            onPress={() => generateMutation.mutate(toISODateString())}
-            activeOpacity={0.7}
-          >
-            <View style={styles.rowIcon}>
-              <Ionicons name="play-circle-outline" size={20} color="#4F46E5" />
+        {/* Financial Tools & Automation (Only available when Online) */}
+        {isOnline && (
+          <>
+            <Text style={styles.sectionTitle}>Database Automation & Scheduler</Text>
+            <View style={styles.card}>
+              <TouchableOpacity
+                style={styles.row}
+                onPress={() => generateMutation.mutate(toISODateString())}
+                activeOpacity={0.7}
+              >
+                <View style={styles.rowIcon}>
+                  <Ionicons name="play-circle-outline" size={20} color="#4F46E5" />
+                </View>
+                <View style={styles.rowContent}>
+                  <Text style={styles.rowLabel}>Run Due Generation (Today)</Text>
+                  <Text style={styles.rowSub}>Triggers PostgreSQL server scheduler</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+              </TouchableOpacity>
             </View>
-            <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Run Due Generation (Today)</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
+          </>
+        )}
 
         {/* Reports & Audit Section */}
         <Text style={styles.sectionTitle}>Reports & Financial Integrity</Text>
@@ -144,6 +153,58 @@ export default function SettingsScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>
+        </View>
+
+        {/* Offline Architecture & Sync Status */}
+        <Text style={styles.sectionTitle}>Offline Architecture & Sync</Text>
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <View style={styles.rowIcon}>
+              <Ionicons
+                name={isOnline ? 'cloud-done-outline' : 'cloud-offline-outline'}
+                size={20}
+                color={isOnline ? '#10B981' : '#EF4444'}
+              />
+            </View>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Network Connection</Text>
+              <Text style={styles.rowSub}>
+                {isOnline ? 'Online (Ready to sync)' : 'Offline (Changes queued locally)'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.rowDivider} />
+
+          <View style={styles.row}>
+            <View style={styles.rowIcon}>
+              <Ionicons name="time-outline" size={20} color="#D97706" />
+            </View>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Pending Offline Queue</Text>
+              <Text style={styles.rowSub}>
+                {pendingSyncCount === 0
+                  ? `All changes synced (Last: ${lastSyncedAt})`
+                  : `${pendingSyncCount} record(s) queued for sync`}
+              </Text>
+            </View>
+            {pendingSyncCount > 0 && isOnline && (
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#4F46E5',
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 8,
+                }}
+                onPress={() => syncEngine.sync()}
+                disabled={isSyncing}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
+                  {isSyncing ? 'Syncing...' : 'Sync Now'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Account Actions */}

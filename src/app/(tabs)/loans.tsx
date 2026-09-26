@@ -23,6 +23,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { formatCurrency, calculateInterestAmount } from '@/utils/financial';
 import { formatDisplayDate } from '@/utils/date';
 import { Loan } from '@/types/database';
+import { getFriendlyErrorMessage } from '@/utils/error';
 
 export default function LoansScreen() {
   const { currentOrgId } = useAppStore();
@@ -59,7 +60,7 @@ export default function LoansScreen() {
       Alert.alert('Loan Deleted', 'The loan record and its interest schedule have been removed.');
     },
     onError: (err: any) => {
-      Alert.alert('Delete Failed', err.message || 'Could not delete loan.');
+      Alert.alert('Delete Failed', getFriendlyErrorMessage(err, 'Could not delete loan.'));
     },
   });
 
@@ -89,7 +90,14 @@ export default function LoansScreen() {
       >
         <View style={styles.cardHeader}>
           <View style={styles.nameBlock}>
-            <Text style={styles.borrowerName}>{item.borrower?.full_name || 'Borrower'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.borrowerName}>{item.borrower?.full_name || 'Borrower'}</Text>
+              {(item as any).is_pending_sync && (
+                <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                  <Text style={{ fontSize: 10, color: '#B45309', fontWeight: '700' }}>⏳ Offline</Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.mobileText}>
               {item.borrower?.mobile_number || '-'}
               {item.borrower?.government_id_masked ? ` • ID: ${item.borrower.government_id_masked}` : ''}

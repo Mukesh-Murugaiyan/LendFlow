@@ -18,9 +18,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { borrowerSchema, BorrowerFormData } from '@/validations/loan';
 import { useAppStore } from '@/store/useAppStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { lendflowApi } from '@/services/api/lendflowApi';
+import { offlineApi } from '@/services/offline/offlineApi';
+import { getFriendlyErrorMessage } from '@/utils/error';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function CreateBorrowerScreen() {
+  const insets = useSafeAreaInsets();
   const { currentOrgId } = useAppStore();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
@@ -49,13 +52,19 @@ export default function CreateBorrowerScreen() {
 
   const onSubmit = async (data: BorrowerFormData) => {
     try {
-      await lendflowApi.createBorrower(data, currentOrgId, user?.id);
+      const { isOffline } = await offlineApi.createBorrower(data, currentOrgId, user?.id);
       queryClient.invalidateQueries({ queryKey: ['borrowers_list'] });
-      Alert.alert('Borrower Created', `${data.full_name} has been added successfully.`, [
+
+      const title = isOffline ? 'Saved Offline ⏳' : 'Borrower Created';
+      const msg = isOffline
+        ? `${data.full_name} has been saved locally. It will automatically sync to the server once online.`
+        : `${data.full_name} has been added successfully.`;
+
+      Alert.alert(title, msg, [
         { text: 'Done', onPress: () => router.back() },
       ]);
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to save borrower');
+      Alert.alert('Error', getFriendlyErrorMessage(err, 'Failed to save borrower.'));
     }
   };
 
@@ -64,7 +73,10 @@ export default function CreateBorrowerScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.keyboardView}
     >
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 40, 60) }]}
+      >
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Full Name *</Text>
           <Controller
@@ -245,7 +257,7 @@ export default function CreateBorrowerScreen() {
         </View>
 
         <TouchableOpacity
-          style={styles.submitBtn}
+          style={[styles.submitBtn, { marginBottom: Math.max(insets.bottom, 16) }]}
           onPress={handleSubmit(onSubmit)}
           disabled={isSubmitting}
           activeOpacity={0.8}

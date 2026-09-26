@@ -15,8 +15,11 @@ import { Badge } from '@/components/Badge';
 import { formatCurrency, calculateInterestAmount } from '@/utils/financial';
 import { formatDisplayDate } from '@/utils/date';
 import { lendflowApi } from '@/services/api/lendflowApi';
+import { getFriendlyErrorMessage } from '@/utils/error';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function BorrowerProfileScreen() {
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
 
@@ -40,7 +43,7 @@ export default function BorrowerProfileScreen() {
       ]);
     },
     onError: (err: any) => {
-      Alert.alert('Delete Failed', err.message || 'Could not delete borrower.');
+      Alert.alert('Delete Failed', getFriendlyErrorMessage(err, 'Could not delete borrower.'));
     },
   });
 
@@ -92,7 +95,10 @@ export default function BorrowerProfileScreen() {
           ),
         }}
       />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 40, 60) }]}
+      >
         {/* Profile Card */}
         <View style={styles.card}>
           <View style={styles.headerRow}>
@@ -169,7 +175,16 @@ export default function BorrowerProfileScreen() {
         <Text style={styles.sectionTitle}>Loans ({borrowerLoans.length})</Text>
         <TouchableOpacity
           style={styles.newLoanLink}
-          onPress={() => router.push('/create-loan')}
+          onPress={() =>
+            router.push({
+              pathname: '/create-loan',
+              params: {
+                borrowerId: borrower?.id || (id as string),
+                borrowerName: borrower?.full_name || '',
+                borrowerMobile: borrower?.mobile_number || '',
+              },
+            })
+          }
         >
           <Text style={styles.newLoanLinkText}>+ New Loan</Text>
         </TouchableOpacity>
@@ -178,6 +193,21 @@ export default function BorrowerProfileScreen() {
       {borrowerLoans.length === 0 ? (
         <View style={styles.emptyBox}>
           <Text style={styles.emptyText}>No loans recorded for this borrower.</Text>
+          <TouchableOpacity
+            style={[styles.newLoanLink, { marginTop: 12, paddingHorizontal: 16, paddingVertical: 8 }]}
+            onPress={() =>
+              router.push({
+                pathname: '/create-loan',
+                params: {
+                  borrowerId: borrower?.id || (id as string),
+                  borrowerName: borrower?.full_name || '',
+                  borrowerMobile: borrower?.mobile_number || '',
+                },
+              })
+            }
+          >
+            <Text style={styles.newLoanLinkText}>+ Add First Loan</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         borrowerLoans.map((loan) => {

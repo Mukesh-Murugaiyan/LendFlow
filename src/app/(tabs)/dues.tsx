@@ -22,6 +22,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { formatCurrency } from '@/utils/financial';
 import { formatDisplayDate, isOverdue } from '@/utils/date';
 import { InterestDue } from '@/types/database';
+import { getFriendlyErrorMessage } from '@/utils/error';
 
 export default function DuesScreen() {
   const { currentOrgId } = useAppStore();
@@ -53,7 +54,7 @@ export default function DuesScreen() {
       queryClient.invalidateQueries({ queryKey: ['loan_details'] });
     },
     onError: (err: any) => {
-      Alert.alert('Payment Error', err.message || 'Failed to mark interest as paid');
+      Alert.alert('Payment Error', getFriendlyErrorMessage(err, 'Failed to mark interest as paid.'));
     },
   });
 
@@ -66,7 +67,7 @@ export default function DuesScreen() {
       queryClient.invalidateQueries({ queryKey: ['loan_details'] });
     },
     onError: (err: any) => {
-      Alert.alert('Reversal Error', err.message || 'Failed to reverse payment');
+      Alert.alert('Reversal Error', getFriendlyErrorMessage(err, 'Failed to reverse payment.'));
     },
   });
 
@@ -110,7 +111,7 @@ export default function DuesScreen() {
       Alert.alert('Due Deleted', 'Interest due record has been removed.');
     },
     onError: (err: any) => {
-      Alert.alert('Delete Failed', err.message || 'Could not delete due.');
+      Alert.alert('Delete Failed', getFriendlyErrorMessage(err, 'Could not delete due.'));
     },
   });
 

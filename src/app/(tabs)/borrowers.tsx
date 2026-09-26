@@ -20,6 +20,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { lendflowApi } from '@/services/api/lendflowApi';
 import { useAppStore } from '@/store/useAppStore';
 import { Borrower } from '@/types/database';
+import { getFriendlyErrorMessage } from '@/utils/error';
 
 export default function BorrowersScreen() {
   const { currentOrgId } = useAppStore();
@@ -52,7 +53,7 @@ export default function BorrowersScreen() {
       Alert.alert('Borrower Deleted', 'The borrower record has been removed.');
     },
     onError: (err: any) => {
-      Alert.alert('Delete Failed', err.message || 'Could not delete borrower.');
+      Alert.alert('Delete Failed', getFriendlyErrorMessage(err, 'Could not delete borrower.'));
     },
   });
 
@@ -90,7 +91,14 @@ export default function BorrowersScreen() {
             <Text style={styles.avatarText}>{item.full_name.charAt(0).toUpperCase()}</Text>
           </View>
           <View style={styles.infoCol}>
-            <Text style={styles.name}>{item.full_name}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.name}>{item.full_name}</Text>
+              {(item as any).is_pending_sync && (
+                <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                  <Text style={{ fontSize: 10, color: '#B45309', fontWeight: '700' }}>⏳ Offline</Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.occupation}>{item.occupation || 'Self-Employed'}</Text>
           </View>
           <View style={styles.actionBtns}>

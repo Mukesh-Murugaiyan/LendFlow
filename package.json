@@ -7,8 +7,11 @@
     "@expo/vector-icons": "^15.0.2",
     "@hookform/resolvers": "^5.9.1",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "12.0.1",
     "@supabase/supabase-js": "^2.117.1",
+    "@tanstack/query-async-storage-persister": "^5.104.0",
     "@tanstack/react-query": "^5.103.2",
+    "@tanstack/react-query-persist-client": "^5.104.0",
     "date-fns": "^4.4.0",
     "expo": "~57.0.25",
     "expo-constants": "~57.0.19",
@@ -58,7 +61,10 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "node ./scripts/migrate.js",
     "db:push": "supabase db push",
-    "db:link": "supabase link --project-ref ijuygzmfyjhfvwvvuyuv"
+    "db:link": "supabase link --project-ref ijuygzmfyjhfvwvvuyuv",
+    "active": "node ./scripts/activate-user.js",
+    "active:user": "node ./scripts/activate-user.js",
+    "activate:user": "node ./scripts/activate-user.js"
   },
   "private": true
 }

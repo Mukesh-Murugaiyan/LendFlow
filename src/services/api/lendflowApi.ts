@@ -2,7 +2,7 @@ import { supabase } from '@/services/supabase';
 import { Loan, Borrower, InterestDue, DashboardSummary, AuditLog } from '@/types/database';
 import { CreateLoanFormData, BorrowerFormData } from '@/validations/loan';
 import { maskGovernmentId } from '@/utils/financial';
-import { toISODateString } from '@/utils/date';
+import { toISODateString, calculateNextDueDate } from '@/utils/date';
 import { isValidUUID } from '@/utils/uuid';
 import { useAppStore } from '@/store/useAppStore';
 
@@ -20,7 +20,7 @@ export async function resolveOrganizationId(orgId?: string, userId?: string): Pr
     const sessionUser = (await supabase.auth.getUser()).data.user;
     const rawUid = userId || sessionUser?.id;
     if (!rawUid || !isValidUUID(rawUid)) {
-      throw new Error('User session not found. Please sign in to perform this action.');
+      throw new Error('User session not found. Please sign in again or contact the admin.');
     }
     const uid = rawUid;
 
@@ -86,7 +86,7 @@ export async function resolveOrganizationId(orgId?: string, userId?: string): Pr
 
     if (orgErr) {
       console.error('[lendflowApi.resolveOrganizationId] Error creating new organization:', orgErr);
-      throw orgErr;
+      throw new Error('Your account is not linked to an organization. Please contact the admin to activate your account.');
     }
 
     await supabase.from('organization_members').insert({
@@ -116,6 +116,9 @@ export async function resolveOrganizationId(orgId?: string, userId?: string): Pr
       hint: err?.hint,
       error: err,
     });
+    if (err?.code === '42501' || err?.message?.includes('row-level security') || err?.message?.includes('violates')) {
+      throw new Error('Access restricted: Account not activated or permission denied. Please contact the admin.');
+    }
     throw err;
   }
 }
@@ -560,7 +563,7 @@ export const lendflowApi = {
         .order('created_at', { ascending: false });
 
       if (search && search.trim() !== '') {
-        query = query.ilike('full_name', `%${search}%`);
+        query = query.or(`full_name.ilike.%${search}%,mobile_number.ilike.%${search}%`);
       }
       const { data, error } = await query;
       if (error) {
@@ -781,6 +784,13 @@ export const lendflowApi = {
         throw new Error(`Valid Due UUID is required (received: "${dueId}")`);
       }
 
+      // Fetch loan_id before deleting so we can sync the loan's next_interest_due_date
+      const { data: dueToDelete } = await supabase
+        .from('interest_dues')
+        .select('loan_id')
+        .eq('id', dueId)
+        .maybeSingle();
+
       const { error } = await supabase
         .from('interest_dues')
         .delete()
@@ -790,6 +800,12 @@ export const lendflowApi = {
         console.error('[lendflowApi.deleteInterestDue] Error deleting interest due:', error);
         throw error;
       }
+
+      // Recalculate loan.next_interest_due_date to match remaining dues or loan_start_date
+      if (dueToDelete?.loan_id) {
+        await this.syncLoanNextDueDate(dueToDelete.loan_id);
+      }
+
       return true;
     } catch (err: any) {
       console.error('[lendflowApi.deleteInterestDue] Error:', {
@@ -803,4 +819,143 @@ export const lendflowApi = {
       throw err;
     }
   },
+
+  // Helper to recalculate and synchronize loan.next_interest_due_date based on current existing dues
+  async syncLoanNextDueDate(loanId: string): Promise<void> {
+    try {
+      const { data: loan, error: loanErr } = await supabase
+        .from('loans')
+        .select('id, loan_start_date, interest_interval_days, interest_type')
+        .eq('id', loanId)
+        .single();
+
+      if (loanErr || !loan) return;
+
+      // Find the remaining due with the latest due_date
+      const { data: latestDue } = await supabase
+        .from('interest_dues')
+        .select('due_date')
+        .eq('loan_id', loanId)
+        .order('due_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const baseDate = latestDue?.due_date || loan.loan_start_date;
+      const nextDue = calculateNextDueDate(
+        baseDate,
+        loan.interest_interval_days,
+        loan.interest_type
+      );
+
+      await supabase
+        .from('loans')
+        .update({
+          next_interest_due_date: nextDue,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', loanId);
+    } catch (err) {
+      console.warn('[lendflowApi.syncLoanNextDueDate] Warning:', err);
+    }
+  },
+
+  // 18. Create Manual Interest Due
+  async createManualDue(params: CreateManualDueParams): Promise<InterestDue> {
+    try {
+      if (!params.loan_id || !isValidUUID(params.loan_id)) {
+        throw new Error(`Valid Loan UUID is required (received: "${params.loan_id}")`);
+      }
+
+      // 1. Fetch current loan details
+      const { data: loan, error: loanErr } = await supabase
+        .from('loans')
+        .select('*')
+        .eq('id', params.loan_id)
+        .single();
+      if (loanErr || !loan) {
+        throw loanErr || new Error('Loan not found');
+      }
+
+      // 2. Determine due_number
+      const { data: maxDue } = await supabase
+        .from('interest_dues')
+        .select('due_number')
+        .eq('loan_id', params.loan_id)
+        .order('due_number', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const nextDueNumber = (maxDue?.due_number || 0) + 1;
+      const isPaid = params.status === 'PAID';
+
+      // 3. Insert into interest_dues
+      const { data: newDue, error: dueErr } = await supabase
+        .from('interest_dues')
+        .insert({
+          organization_id: params.organization_id || loan.organization_id,
+          loan_id: params.loan_id,
+          borrower_id: params.borrower_id || loan.borrower_id,
+          due_number: nextDueNumber,
+          period_start_date: params.period_start_date,
+          due_date: params.due_date,
+          principal_amount: loan.principal_amount,
+          interest_rate: loan.interest_rate,
+          interest_amount: params.interest_amount,
+          status: params.status || 'UNPAID',
+          paid_at: isPaid ? new Date().toISOString() : null,
+          paid_amount: isPaid ? params.interest_amount : null,
+          payment_note: params.notes || null,
+        })
+        .select('*, borrower:borrowers(*), loan:loans(*)')
+        .single();
+
+      if (dueErr) {
+        if (dueErr.code === '23505') {
+          throw new Error(`A due record already exists on ${params.due_date} for this loan.`);
+        }
+        console.error('[lendflowApi.createManualDue] Error inserting due:', dueErr);
+        throw dueErr;
+      }
+
+      // 4. If new due_date >= loan.next_interest_due_date, advance loan.next_interest_due_date
+      if (params.due_date >= loan.next_interest_due_date) {
+        const advancedDueDate = calculateNextDueDate(
+          params.due_date,
+          loan.interest_interval_days,
+          loan.interest_type
+        );
+        await supabase
+          .from('loans')
+          .update({
+            next_interest_due_date: advancedDueDate,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', params.loan_id);
+      }
+
+      return newDue as InterestDue;
+    } catch (err: any) {
+      console.error('[lendflowApi.createManualDue] Error:', {
+        params,
+        message: err?.message,
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint,
+        error: err,
+      });
+      throw err;
+    }
+  },
 };
+
+export interface CreateManualDueParams {
+  loan_id: string;
+  borrower_id: string;
+  organization_id?: string;
+  due_date: string;
+  period_start_date: string;
+  interest_amount: number;
+  status?: 'UNPAID' | 'PAID';
+  notes?: string;
+}
+
